@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MirrorChat</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#111;color:#eee;margin:0;display:flex;flex-direction:column;height:100vh}
+  header{padding:12px 16px;background:#1c1c1c;font-weight:600}
+  #log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+  .msg{max-width:75%;padding:8px 12px;border-radius:12px;background:#2a2a2a;word-wrap:break-word}
+  .msg.me{align-self:flex-end;background:#2f5fd0}
+  .msg.bot{background:#3a2f55}
+  .who{font-size:11px;opacity:.6;margin-bottom:2px}
+  form{display:flex;gap:8px;padding:12px;background:#1c1c1c}
+  input{flex:1;padding:10px;border-radius:8px;border:0;background:#2a2a2a;color:#eee}
+  button{padding:10px 16px;border:0;border-radius:8px;background:#2f5fd0;color:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<header>🪞 MirrorChat <span id="me" style="opacity:.5;font-weight:400"></span></header>
+<div id="log"></div>
+<form id="f"><input id="t" placeholder="Say something…" maxlength="500" autocomplete="off" required><button>Send</button></form>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const adj = ["Happy","Sleepy","Brave","Quick","Sneaky","Chill"], noun = ["Fox","Panda","Otter","Wolf","Owl","Koala"];
+const pick = a => a[Math.floor(Math.random()*a.length)];
+let name = localStorage.getItem("mc_name");
+if(!name){ name = pick(adj)+pick(noun)+Math.floor(Math.random()*100); localStorage.setItem("mc_name", name); }
+document.getElementById("me").textContent = "· you are " + name;
+
+const log = document.getElementById("log"), seen = new Set();
+function render(m){
+  if(seen.has(m.id)) return; seen.add(m.id);
+  const d = document.createElement("div");
+  d.className = "msg" + (m.username===name ? " me" : "") + (m.is_bot ? " bot" : "");
+  const w = document.createElement("div"); w.className="who"; w.textContent = (m.is_bot?"🤖 ":"")+m.username;
+  const b = document.createElement("div"); b.textContent = m.body;
+  d.append(w,b); log.append(d); log.scrollTop = log.scrollHeight;
+}
+
+const replies = ["Interesting, tell me more!","Ha, I was just thinking that.","Hmm, why do you say that?","Totally agree 👍","Bold take.","Did you know octopuses have three hearts?","Random fact: bananas are berries.","I'm just a humble bot, but sure!","Say that again but in pirate.","Mirror mirror on the wall… who's chatting the most of all?"];
+
+(async()=>{
+  const {data} = await sb.from("messages").select("*").order("created_at",{ascending:false}).limit(50);
+  (data||[]).reverse().forEach(render);
+  sb.channel("room").on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},p=>render(p.new)).subscribe();
+})();
+
+document.getElementById("f").onsubmit = async e => {
+  e.preventDefault();
+  const t = document.getElementById("t"), body = t.value.trim(); if(!body) return; t.value="";
+  await sb.from("messages").insert({username:name, body});
+  // simple bot: replies randomly ~60% of the time
+  if(Math.random()<0.6) setTimeout(()=>sb.from("messages").insert({username:"MirrorBot", body:pick(replies), is_bot:true}), 800+Math.random()*1200);
+};
+</script>
+</body>
+</html>
