@@ -19,6 +19,8 @@
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
   <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.500 6a8.500 8.500 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
 </svg>
 
 <header class="bar">
@@ -32,18 +34,19 @@
   </div>
   <div class="bar__right">
     <span class="chip">You are <b id="me"></b></span>
+    <button type="button" class="icon-btn" id="rename" aria-label="Change your name"><svg aria-hidden="true"><use href="#i-edit"/></svg><span class="icon-btn__label">Change name</span></button>
     <button type="button" class="icon-btn" id="mute"><svg aria-hidden="true"><use href="#i-sound"/></svg><span class="icon-btn__label">Sound on</span></button>
     <a class="tab" href="video.html">Video chat</a>
   </div>
 </header>
 
 <div class="chat" id="chat" data-mode="rooms">
-  <aside class="rooms" id="rooms" aria-label="Rooms"><h2>Rooms</h2></aside>
+  <aside class="rooms" id="rooms" aria-label="Rooms"><h2>Rooms</h2><p class="legal-links"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></p></aside>
 
   <section class="chat__main" aria-label="Conversation">
     <div class="chat__head">
       <div><h1 class="chat__title" id="title">General</h1><p class="chat__sub" id="sub">Everyone in this room reads every message.</p></div>
-      <span class="state" id="rstate" data-state="idle" hidden><span class="state__dot"></span><span id="rstate-text">Ready</span></span>
+      <div class="bar__right"><button type="button" class="icon-btn" id="copylink" aria-label="Copy a link to this chat"><svg aria-hidden="true"><use href="#i-link"/></svg><span class="icon-btn__label">Copy link</span></button><span class="state" id="rstate" data-state="idle" hidden><span class="state__dot"></span><span id="rstate-text">Ready</span></span></div>
     </div>
 
     <div class="pair" id="pair" hidden>
@@ -67,6 +70,17 @@
     </div>
   </section>
 </div>
+
+<dialog class="dlg" id="nameDlg" aria-labelledby="nameTitle">
+  <form id="nameForm" novalidate>
+    <h2 id="nameTitle">Change your name</h2>
+    <p>Up to 24 letters, numbers, spaces, dots, dashes or underscores.</p>
+    <label class="sr-only" for="nameIn">Your name</label>
+    <input id="nameIn" maxlength="24" autocomplete="off">
+    <div class="err" id="nameErr" role="alert"></div>
+    <div class="btns"><button class="btn btn--ghost" type="button" id="nameCancel">Cancel</button><button class="btn" type="submit">Save name</button></div>
+  </form>
+</dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
@@ -117,9 +131,9 @@ function setMode(m) {
   $("pair").hidden = m !== "random";
   $("rstate").hidden = m !== "random";
   log.replaceChildren();
-  if (m === "rooms") { history.replaceState(null, "", "#rooms"); joinRoom(room); }
+  if (m === "rooms") { joinRoom(room); }
   else {
-    history.replaceState(null, "", "#random");
+    history.replaceState(null, "", location.pathname + "#random");
     $("title").textContent = "Random 1-to-1";
     $("sub").textContent = "You are paired with one stranger. Next finds someone else.";
     setComposer(false);
@@ -133,6 +147,7 @@ $("tab-random").onclick = () => setMode("random");
 /* ---------- rooms ---------- */
 let room = "general";
 try { const r = localStorage.getItem("mc_room"); if (ROOMS.some(x => x.id === r)) room = r; } catch (e) {}
+const qroom = new URLSearchParams(location.search).get("room"); if (ROOMS.some(x => x.id === qroom)) room = qroom;
 let roomCh = null, roomToken = 0, seen = new Set();
 
 function paintRooms() {
@@ -145,7 +160,7 @@ function paintRooms() {
     b.innerHTML = "<span></span><small></small>";
     b.firstChild.textContent = r.name; b.lastChild.textContent = r.blurb;
     b.onclick = () => { if (r.id !== room) { room = r.id; try { localStorage.setItem("mc_room", room); } catch (e) {} joinRoom(room); } };
-    list.append(b);
+    list.insertBefore(b, list.querySelector(".legal-links"));
   }
 }
 function leaveRoom() { roomToken++; if (roomCh) { sb.removeChannel(roomCh); roomCh = null; } }
@@ -161,6 +176,7 @@ async function joinRoom(id) {
   leaveRoom();
   const my = roomToken;
   seen = new Set(); log.replaceChildren(); paintRooms();
+  history.replaceState(null, "", location.pathname + "?room=" + id);
   const info = ROOMS.find(r => r.id === id);
   $("title").textContent = info.name;
   $("sub").textContent = "Everyone in this room reads every message.";
@@ -180,13 +196,34 @@ async function joinRoom(id) {
 
 async function sendRoom(body) {
   const { error } = await sb.from("messages").insert({ username: name, body, room });
-  if (error) { note("Message not sent: " + error.message); return; }
+  if (error) {
+    note(/slow down/i.test(error.message) ? "You are sending messages too fast. Wait a few seconds." : /not allowed/i.test(error.message) ? "That message is not allowed." : "Message not sent: " + error.message);
+    return;
+  }
   MCSound.play("send");
   if (Math.random() < 0.6) {
     const r = room;
     setTimeout(() => sb.from("messages").insert({ username: "MirrorBot", body: pick(replies), is_bot: true, room: r }), 800 + Math.random() * 1200);
   }
 }
+
+/* ---------- name and share link ---------- */
+$("rename").onclick = () => { $("nameIn").value = name; $("nameErr").textContent = ""; $("nameDlg").showModal(); $("nameIn").select(); };
+$("nameCancel").onclick = () => $("nameDlg").close();
+$("nameForm").onsubmit = e => {
+  e.preventDefault();
+  const v = $("nameIn").value.trim();
+  const err = !v ? "Write a name." : v.length > 24 ? "Use 24 characters or fewer." : !/^[\p{L}\p{N} _.-]+$/u.test(v) ? "Use letters, numbers, spaces, dots, dashes or underscores." : /mirror\s*bot/i.test(v) ? "That name belongs to the bot." : "";
+  if (err) { $("nameErr").textContent = err; return; }
+  name = v; try { localStorage.setItem("mc_name", name); } catch (e) {}
+  $("me").textContent = name; $("nameDlg").close();
+};
+$("copylink").onclick = async () => {
+  const url = location.origin + location.pathname + (mode === "random" ? "#random" : "?room=" + room);
+  const label = $("copylink").querySelector(".icon-btn__label");
+  try { await navigator.clipboard.writeText(url); } catch (e) { window.prompt("Copy this link", url); return; }
+  label.textContent = "Copied"; setTimeout(() => { label.textContent = "Copy link"; }, 1500);
+};
 
 /* ---------- composer ---------- */
 function setComposer(on) { $("t").disabled = !on; $("send").disabled = !on; if (on) $("t").placeholder = "Say something"; else $("t").placeholder = "Connect to someone to start chatting"; }
