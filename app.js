@@ -1,4 +1,4 @@
-/* MirrorChat – random 1:1 video chat.
+/* Passerby (internal name: MirrorChat) – random 1:1 video chat.
  *
  * Supabase Realtime is used only as a matchmaker + signaling channel:
  *   - "lobby" channel  : Presence (who is searching) + Broadcast (invite/accept handshake)
@@ -15,6 +15,10 @@
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 20 } } });
   const rtcConfig = { iceServers: window.ICE_SERVERS || [{ urls: "stun:stun.l.google.com:19302" }] };
 
+  const BRAND = window.BRAND || { name: "Passerby" };
+  document.title = BRAND.name + " – meet someone new";
+  $("brand").textContent = BRAND.name;
+  document.querySelectorAll(".brandname").forEach(e => { e.textContent = BRAND.name; });
   $("myid").textContent = "anon-" + myId.slice(0, 6);
 
   // ---- state -------------------------------------------------------------
@@ -31,6 +35,10 @@
   let iceQueue = [];
   const blocked = new Set();     // reported ids – never match again this session
   const recent = new Set();      // last partners – avoid instant rematch
+  const skipUntil = new Map();   // peer id -> timestamp: didn't answer / couldn't connect, leave alone for a while
+  const lastSeen = new Map();    // peer id -> {t, at}: presence heartbeat tracking to spot ghosts (closed tabs)
+  let slowTimer = null, heartbeat = null;
+  const skip = (id, ms) => id && skipUntil.set(id, Date.now() + ms);
 
   // ---- ui helpers --------------------------------------------------------
   const log = $("log");
@@ -104,6 +112,8 @@
     }));
     lobbyReady = true;
     matchTimer = setInterval(tryMatch, 2000);
+    // Searching clients re-announce every 8s; peers that stop doing so are ghosts (closed tab, presence not yet expired).
+    heartbeat = setInterval(() => { if (state === "searching" && active) track("searching").catch(() => {}); }, 8000);
   }
 
   const track = status => lobby.track({ status, t: Date.now() });
@@ -112,14 +122,20 @@
 
   function tryMatch() {
     if (state !== "searching" || pending || !lobbyReady) return;
-    const st = lobby.presenceState();
-    let c = Object.keys(st).filter(k => k !== myId && !blocked.has(k) &&
-      (st[k][st[k].length - 1] || {}).status === "searching");
+    const now = Date.now(), st = lobby.presenceState();
+    let c = Object.keys(st).filter(k => {
+      if (k === myId || blocked.has(k) || (skipUntil.get(k) || 0) > now) return false;
+      const m = st[k][st[k].length - 1] || {};
+      if (m.status !== "searching") return false;
+      const seen = lastSeen.get(k);
+      if (!seen || seen.t !== m.t) lastSeen.set(k, { t: m.t, at: now });
+      return now - lastSeen.get(k).at < 25000;   // heartbeat seen recently
+    });
     const fresh = c.filter(k => !recent.has(k));
     if (fresh.length) c = fresh;
     if (!c.length) return;
     const to = pick(c), r = uid();
-    pending = { to, room: r, timer: setTimeout(() => { pending = null; tryMatch(); }, 2500 + Math.random() * 1000) };
+    pending = { to, room: r, timer: setTimeout(() => { skip(to, 20000); pending = null; tryMatch(); }, 2500 + Math.random() * 1000) };
     lobby.send({ type: "broadcast", event: "invite", payload: { to, from: myId, room: r } });
   }
 
@@ -160,8 +176,29 @@
     recent.add(peer); setTimeout(() => recent.delete(peer), 60000);
     setState("connecting");
     setStatus("Found someone – connecting…", true, "Connecting");
-    clearTimeout(connectTimer);
-    connectTimer = setTimeout(() => { addMsg("Connection timed out, finding someone else…", "sys"); restart(); }, 15000);
+    clearTimeout(connectTimer); clearTimeout(slowTimer);
+    slowTimer = setTimeout(() => {
+      if (state === "connecting") setStatus("Still connecting… the other person's network may be slow.", true, "Connecting");
+    }, 6000);
+    connectTimer = setTimeout(() => {
+      if (isLinked()) return markConnected();       // it actually worked, a browser event just never fired
+      skip(peer, 120000);                           // don't loop with someone we can't reach
+      addMsg("Couldn't connect to that person, finding someone else…", "sys");
+      restart();
+    }, 15000);
+  }
+
+  const isLinked = () => !!pc && (pc.connectionState === "connected" ||
+    pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed");
+
+  // Single, idempotent "we're live" transition, fed by several independent signals
+  function markConnected() {
+    clearTimeout(connectTimer); clearTimeout(slowTimer); clearTimeout(discTimer);
+    if (state === "connected" || state !== "connecting") return;
+    setState("connected"); hideStatus(); $("tag").style.display = ""; blip([660, 880]);
+    $("remote").classList.add("flash"); setTimeout(() => $("remote").classList.remove("flash"), 600);
+    $("remoteVideo").play().catch(() => {});
+    addMsg("You're connected. Say hi! 👋", "sys"); $("t").focus();
   }
 
   // ---- per-call signaling channel ----------------------------------------
@@ -182,28 +219,33 @@
     pc = new RTCPeerConnection(rtcConfig);
     iceQueue = [];
     localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-    pc.ontrack = e => { $("remoteVideo").srcObject = e.streams[0]; };
+    pc.ontrack = e => {
+      const v = $("remoteVideo");
+      v.srcObject = e.streams[0];
+      v.onplaying = () => { if (tok === session) markConnected(); };   // video is really on screen
+    };
     pc.onicecandidate = e => { if (e.candidate && tok === session) sig("ice", e.candidate.toJSON()); };
+    pc.oniceconnectionstatechange = () => {
+      if (tok !== session || !pc) return;
+      if (isLinked()) markConnected();
+    };
     pc.onconnectionstatechange = () => {
       if (tok !== session || !pc) return;
       const s = pc.connectionState;
-      if (s === "connected") {
-        clearTimeout(connectTimer); clearTimeout(discTimer);
-        if (state !== "connected") {
-          setState("connected"); hideStatus(); $("tag").style.display = ""; blip([660, 880]);
-          $("remote").classList.add("flash"); setTimeout(() => $("remote").classList.remove("flash"), 600);
-          $("remoteVideo").play().catch(() => {});
-          addMsg("You're connected. Say hi! 👋", "sys"); $("t").focus();
-        }
-      } else if (s === "disconnected") {
-        clearTimeout(discTimer); discTimer = setTimeout(() => tok === session && partnerLeft(), 6000);
-      } else if (s === "failed") partnerLeft();
+      if (s === "connected") { clearTimeout(discTimer); markConnected(); }
+      else if (s === "disconnected") {
+        clearTimeout(discTimer); discTimer = setTimeout(() => tok === session && !isLinked() && partnerLeft(), 6000);
+      } else if (s === "failed") {
+        if (state === "connecting") { skip(partnerId, 120000); addMsg("Couldn't connect to that person, finding someone else…", "sys"); restart(); }
+        else partnerLeft();
+      }
     };
     return pc;
   }
 
   function setupDc(ch) {
     dc = ch;
+    ch.onopen = () => markConnected();
     ch.onmessage = e => {
       try {
         const m = JSON.parse(e.data);
@@ -252,7 +294,7 @@
   // ---- lifecycle ---------------------------------------------------------
   async function teardown(notify) {
     session++; $("tag").style.display = "none";
-    clearTimeout(connectTimer); clearTimeout(discTimer); clearPending();
+    clearTimeout(connectTimer); clearTimeout(discTimer); clearTimeout(slowTimer); clearPending();
     const p = pair, d = dc, c = pc;
     pair = dc = pc = null; partnerId = room = null; iceQueue = [];
     try { d && d.close(); } catch {}
@@ -302,7 +344,7 @@
       $("pip").style.display = "block";
       return true;
     } catch (e) {
-      setStatus("MirrorChat needs your camera and microphone. Allow access in your browser's address bar, then press Start again.", false, "Camera blocked");
+      setStatus(BRAND.name + " needs your camera and microphone. Allow access in your browser's address bar, then press Start again.", false, "Camera blocked");
       return false;
     }
   }
@@ -324,7 +366,7 @@
   $("stop").onclick = async () => {
     active = false;
     setState("idle");
-    setStatus("Random 1-on-1 video chat. No sign-up, no accounts.", false, "Meet someone new");
+    setStatus("A stranger, a camera, a conversation. No sign-up, no accounts.", false, "Meet someone new");
     showTyping(false);
     await teardown(true);
     try { if (lobbyReady && !active) await lobby.untrack(); } catch {}

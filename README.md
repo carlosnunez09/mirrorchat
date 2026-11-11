@@ -1,4 +1,4 @@
-# MirrorChat
+# MirrorChat (public brand: Passerby)
 
 Omegle-style random video chat. **No sign-up**: open the page, press Start, and you're paired with a random stranger. Static HTML/JS, no build step, powered by Supabase Realtime.
 
@@ -12,6 +12,8 @@ Omegle-style random video chat. **No sign-up**: open the page, press Start, and 
 | `reports` table | Insert-only abuse report log |
 
 Each page load gets a random throwaway id (`anon-xxxxxx`); nothing is stored about you.
+
+The repo/internal name is MirrorChat; the name users see is set in `config.js` (`window.BRAND`).
 
 ## Setup
 
