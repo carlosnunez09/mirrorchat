@@ -155,3 +155,25 @@ button { font: inherit; }
   .tag--local { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } .state__dot { animation: none !important; } }
+
+/* legal pages and small shared bits */
+.doc { flex: 1; min-height: 0; overflow-y: auto; }
+.doc__inner { width: min(100% - 48px, 720px); margin: 0 auto; padding: 48px 0 96px; }
+.doc h1 { margin: 0 0 8px; font: 400 clamp(32px, 5vw, 48px)/1.1 var(--font-display); letter-spacing: -0.03em; }
+.doc h2 { margin: 40px 0 8px; font: 500 22px/1.25 var(--font-display); letter-spacing: -0.02em; }
+.doc p, .doc li { color: var(--ink); max-width: 62ch; }
+.doc ul { padding-left: 20px; }
+.doc .updated { color: var(--muted); font-size: 14px; }
+.doc a { text-decoration: underline; text-underline-offset: 3px; }
+.legal-links { margin: auto 12px 4px; padding-top: 16px; font-size: 13px; color: var(--muted); display: flex; gap: 12px; }
+.legal-links a { text-decoration: none; }
+.legal-links a:hover { color: var(--ink); text-decoration: underline; }
+dialog.dlg { border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); padding: 24px; width: min(92vw, 420px); }
+dialog.dlg::backdrop { background: rgb(5 7 11 / .7); }
+dialog.dlg h2 { margin: 0 0 4px; font: 500 20px/1.3 var(--font-display); }
+dialog.dlg p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+dialog.dlg input { width: 100%; min-height: 48px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: 400 16px/1 var(--font-text); }
+dialog.dlg .err { min-height: 20px; margin: 8px 4px 0; color: var(--danger); font-size: 14px; }
+dialog.dlg .btns { margin-top: 12px; justify-content: flex-end; }
+
+@media (max-width: 1023px) { .rooms .legal-links { display: none; } }

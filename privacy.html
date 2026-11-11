@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MirrorChat privacy: what we store and who sees it</title>
+<meta name="description" content="What MirrorChat stores, what other people can see, and which services it uses.">
+<meta name="theme-color" content="#0a0d14">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@400..700&family=Funnel+Sans:wght@400..600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="index.html" aria-label="MirrorChat home">
+    <svg viewBox="0 0 32 26" aria-hidden="true"><path fill="#5ab9fc" d="M6 1h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9.500l-3 4v-4H6a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z"/><path fill="#e9edf3" d="M26 1h-6a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h2.500l3 4v-4h.5a3 3 0 0 0 3-3V4a3 3 0 0 0-3-3z"/></svg>
+    MirrorChat
+  </a>
+  <div class="bar__right"><a class="tab" href="privacy.html">Privacy</a><a class="tab" href="terms.html">Terms</a><a class="tab" href="chat.html">Open chat</a></div>
+</header>
+<main class="doc"><div class="doc__inner">
+<h1>Privacy</h1>
+<p class="updated">Last updated November 2026</p>
+<p>MirrorChat has no accounts. You get a random name, and the site keeps as little as it can. This page says exactly what is stored and who can see it.</p>
+
+<h2>What stays in your browser</h2>
+<ul>
+  <li>Your chat name, the room you last used, and whether sound is on. These live in your browser's local storage and never leave your device unless you post.</li>
+  <li>There are no cookies, no ads and no analytics.</li>
+</ul>
+
+<h2>Public rooms</h2>
+<ul>
+  <li>Messages you post in a room are saved in our database with your name, the room and the time.</li>
+  <li>Everyone in that room can read them. They are not private, and they stay until they are removed.</li>
+  <li>Do not post anything you want to keep private.</li>
+</ul>
+
+<h2>Random 1-to-1 text and video</h2>
+<ul>
+  <li>Messages in a random 1-to-1 text chat, and the text box beside a video call, go only to your partner. We do not store them.</li>
+  <li>Video and sound travel directly between your browser and your partner's, and are encrypted. We do not record or store them.</li>
+  <li>To pair you, a temporary random ID is kept in a waiting list for up to about 25 seconds.</li>
+  <li>When you press Report, we store your temporary ID, the other person's temporary ID and the time, so abuse can be reviewed.</li>
+</ul>
+
+<h2>Your IP address</h2>
+<p>In a direct video call, your partner's browser can see your IP address. This is how internet video works. If the call has to go through a relay server instead, the relay sees it and your partner does not. If this worries you, use a VPN.</p>
+
+<h2>Services MirrorChat uses</h2>
+<ul>
+  <li><strong>Supabase</strong> stores room messages and reports and carries live messages.</li>
+  <li><strong>Cloudflare</strong> hosts the site and, when a direct video connection fails, relays the call.</li>
+  <li><strong>Google</strong> provides the STUN servers that help two browsers find each other, and the fonts. Google sees your IP address when these load.</li>
+  <li><strong>jsDelivr</strong> serves the Supabase code library.</li>
+</ul>
+
+<h2>Removing a message</h2>
+<p>Because there are no accounts, we cannot tell whose message is whose beyond the name shown. If a message in a public room should be removed, tell the site owner what it says and which room it is in.</p>
+
+<h2>Children</h2>
+<p>MirrorChat is not for children. Video chat and random 1-to-1 text ask you to confirm you are 18 or older.</p>
+</div></main>
+</body>
+</html>
