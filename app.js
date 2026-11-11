@@ -78,6 +78,7 @@
     const inCall = state === "connected", active = state !== "idle";
     $("start").disabled = active || !ageOk;
     $("start2").style.display = active ? "none" : "";
+    document.body.classList.toggle("idle", !active);
     $("start2").disabled = !ageOk;
     $("start").style.display = active ? "none" : "";
     $("next").style.display = active ? "" : "none";

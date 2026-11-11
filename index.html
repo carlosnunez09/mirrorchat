@@ -83,6 +83,21 @@
   dialog ul{padding-left:20px;margin:10px 0}
   dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
   .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:10px 16px;border-radius:99px;font-size:14px;z-index:10;box-shadow:0 8px 30px rgba(0,0,0,.5);animation:pop .2s}
+  /* Landing (idle): one centered column, no empty chat panel, no controls */
+  body.idle main{grid-template-columns:minmax(0,1fr)}
+  body.idle aside,body.idle .controls,body.idle #pip,body.idle .tag{display:none!important}
+  body.idle .stage{border-color:transparent;background:transparent}
+  body.idle #overlay{background:none;gap:18px}
+  body.idle #overlay::before,body.idle #overlay::after{content:"";position:absolute;width:min(46vmin,420px);aspect-ratio:1;border-radius:50%;border:1px solid var(--line);z-index:-1;top:50%;pointer-events:none}
+  body.idle #overlay::before{left:calc(50% - min(46vmin,420px) + 38px);transform:translateY(-50%);border-color:rgba(233,184,107,.28)}
+  body.idle #overlay::after{left:calc(50% - 38px);transform:translateY(-50%)}
+  body.idle #overlay h2{font-size:clamp(34px,6vw,64px);line-height:1.04}
+  body.idle #status{font-size:clamp(16px,2vw,19px);max-width:460px;color:var(--dim)}
+  body.idle .big{padding:16px 40px;font-size:18px}
+  .facts{display:none;list-style:none;margin:10px 0 0;padding:0;gap:6px 22px;flex-wrap:wrap;justify-content:center;color:var(--dim);font-size:13.5px}
+  .facts li::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-right:8px;vertical-align:middle}
+  body.idle .facts{display:flex}
+  .big:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(233,184,107,.3)}
   @media (max-width:860px){
     main{grid-template-columns:1fr;grid-template-rows:minmax(0,3fr) minmax(0,2fr);padding:0 12px 10px;gap:10px}
     header{padding:10px 14px}
@@ -94,7 +109,7 @@
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
-<body>
+<body class="idle">
 <header>
   <div class="logo"><i></i><span id="brand">Passerby</span></div>
   <span class="grow"></span>
@@ -112,6 +127,7 @@
       <h2 id="title">Meet someone new</h2>
       <div id="status">A stranger, a camera, a conversation. No sign-up, no accounts.</div>
       <button class="big" id="start2">Say hello</button>
+      <ul class="facts"><li>One stranger at a time</li><li>No account</li><li>Video goes peer-to-peer</li><li>18+ only</li></ul>
     </div>
   </section>
 
