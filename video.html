@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MirrorChat video: random video chat</title>
+<meta name="description" content="Random one-to-one video chat with a text box beside the call. Confirm you are 18 or older, press Start, and use Next or Report at any time.">
+<meta name="theme-color" content="#0a0d14">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@400..700&family=Funnel+Sans:wght@400..600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5v14l9-7z" fill="currentColor"/><path d="M18 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.500 6a8.500 8.500 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html" aria-label="MirrorChat home">
+    <svg viewBox="0 0 32 26" aria-hidden="true"><path fill="#5ab9fc" d="M6 1h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9.500l-3 4v-4H6a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z"/><path fill="#e9edf3" d="M26 1h-6a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h2.500l3 4v-4h.5a3 3 0 0 0 3-3V4a3 3 0 0 0-3-3z"/></svg>
+    <span class="sr-only">MirrorChat</span><span aria-hidden="true">MirrorChat</span>
+  </a>
+  <div class="bar__right">
+    <button type="button" class="icon-btn" id="mute"><svg aria-hidden="true"><use href="#i-sound"/></svg><span class="icon-btn__label">Sound on</span></button>
+    <a class="tab" href="chat.html">Text chat</a>
+  </div>
+</header>
+
+<div class="call">
+  <section class="call__main" aria-label="Video call">
+    <div class="call__top">
+      <span class="state" id="state" data-state="idle"><span class="state__dot"></span><span id="state-text">Ready</span></span>
+      <span class="quality" id="quality" data-q="good" hidden><span class="quality__bars" aria-hidden="true"><i></i><i></i><i></i></span><span id="quality-text">Good connection</span></span>
+    </div>
+
+    <div class="stage" id="stage">
+      <video id="remote" autoplay playsinline aria-label="The other person"></video>
+      <video id="local" autoplay playsinline muted hidden aria-label="Your camera"></video>
+      <span class="tag tag--remote" id="tag-remote" hidden>Stranger</span>
+      <div id="status" role="status"><span id="status-title">Confirm you're 18+ and press Start</span><small id="status-hint">You are matched with a random stranger. Next skips them, Report flags them, and Stop ends the session.</small></div>
+    </div>
+
+    <div class="controls">
+      <label class="consent"><input type="checkbox" id="age"> I'm 18+ and will follow the rules: no nudity, harassment or illegal content.</label>
+      <div class="controls__row btns">
+        <button class="btn" id="start" type="button" disabled><svg aria-hidden="true"><use href="#i-play"/></svg>Start</button>
+        <button class="btn btn--ghost" id="next" type="button" disabled><svg aria-hidden="true"><use href="#i-next"/></svg>Next person</button>
+        <button class="btn btn--danger" id="report" type="button" disabled><svg aria-hidden="true"><use href="#i-flag"/></svg>Report</button>
+        <button class="btn btn--ghost" id="stop" type="button" disabled><svg aria-hidden="true"><use href="#i-stop"/></svg>Stop</button>
+      </div>
+      <p class="hints"><b>Next person</b> skips this call · <b>Report</b> flags them and skips · <b>Stop</b> ends the session</p>
+    </div>
+  </section>
+
+  <aside class="side" aria-label="Chat with your partner">
+    <div class="side__head">Chat with your partner<small>Messages go straight to them and are not saved.</small></div>
+    <div class="log" id="slog" role="log" aria-live="polite" aria-label="Messages with your partner"></div>
+    <div class="composer">
+      <form id="sf">
+        <label class="sr-only" for="st">Message to your partner</label>
+        <input id="st" placeholder="Connect to someone first" maxlength="500" autocomplete="off" disabled>
+        <button class="btn" id="ssend" type="submit" disabled>Send</button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="sounds.js"></script>
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const myId = crypto.randomUUID();
+MCSound.bindToggle($("mute"));
+
+/* STUN works for most networks. /api/ice adds a TURN relay (Cloudflare) so calls also connect on strict ones. */
+const STUN = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
+let ICE = null, iceAt = 0;
+async function loadIce() {
+  if (ICE && Date.now() - iceAt < 30 * 60 * 1000) return;
+  try {
+    const r = await fetch("/api/ice", { cache: "no-store" });
+    if (r.ok) { const j = await r.json(); if (Array.isArray(j.iceServers) && j.iceServers.length) { ICE = j.iceServers; iceAt = Date.now(); return; } }
+  } catch (e) {}
+  ICE = STUN; iceAt = Date.now();
+}
+
+let localStream = null, listenCh = null, sendCh = null, pc = null, dc = null;
+let peerId = null, token = 0, retryTimer = null, failTimer = null, statsTimer = null, pendingIce = [], active = false, gotTrack = false;
+let lastStats = { lost: 0, recv: 0 };
+
+/* ---------- what the screen says ---------- */
+function setState(state, text) { $("state").dataset.state = state; $("state-text").textContent = text; }
+function setStatus(title, hint) {
+  $("status-title").textContent = title || "";
+  $("status-hint").textContent = hint || "";
+  $("status-hint").hidden = !hint;
+  $("status").style.display = title ? "flex" : "none";
+}
+const buttons = on => { $("next").disabled = $("report").disabled = $("stop").disabled = !on; };
+
+/* ---------- chat beside the call ---------- */
+const slog = $("slog");
+function sAdd(cls, who, body) {
+  const d = document.createElement("div"); d.className = "msg" + (cls ? " " + cls : "");
+  if (who) { const w = document.createElement("div"); w.className = "who"; w.textContent = who; d.append(w); }
+  const b = document.createElement("div"); b.textContent = body; d.append(b);
+  slog.append(d); slog.scrollTop = slog.scrollHeight;
+}
+function sEnable(on) {
+  $("st").disabled = $("ssend").disabled = !on;
+  $("st").placeholder = on ? "Message your partner" : "Connect to someone first";
+}
+$("sf").onsubmit = e => {
+  e.preventDefault();
+  const body = $("st").value.trim();
+  if (!body || !dc || dc.readyState !== "open") return;
+  dc.send(body); $("st").value = ""; sAdd("me", "You", body); MCSound.play("send");
+};
+function wireChannel(ch) {
+  dc = ch;
+  ch.onopen = () => { sEnable(true); slog.replaceChildren(); sAdd("note", "", "You are connected. Say hi."); };
+  ch.onclose = () => sEnable(false);
+  ch.onmessage = e => { sAdd("", "Stranger", String(e.data).slice(0, 500)); MCSound.play("message"); };
+}
+
+/* ---------- controls ---------- */
+$("age").onchange = () => $("start").disabled = !$("age").checked;
+$("start").onclick = start;
+$("next").onclick = () => { sendBye(); MCSound.play("left"); next("Looking for someone new…"); };
+$("stop").onclick = stop;
+$("report").onclick = async () => {
+  if (!peerId) return;
+  await sb.rpc("report_peer", { reporter: myId, reported: peerId });
+  MCSound.play("report");
+  sendBye(); next("Reported. Finding someone new…");
+};
+addEventListener("beforeunload", () => { sendBye(); sb.rpc("leave_queue", { my_id: myId }); });
+
+function cameraError(e) {
+  switch (e && e.name) {
+    case "NotAllowedError": case "SecurityError": return ["Camera or microphone is blocked", "Allow access in your browser's address bar, then press Start again."];
+    case "NotFoundError": case "OverconstrainedError": return ["No camera or microphone found", "Plug one in or check your system settings, then press Start again."];
+    case "NotReadableError": return ["Your camera is busy", "Close other apps or tabs that use it, then press Start again."];
+    default: return ["Could not start your camera", (e && e.message) || "Try again."];
+  }
+}
+
+async function start() {
+  MCSound.unlock();
+  setState("connecting", "Starting camera");
+  setStatus("Starting your camera…", "Your browser may ask to allow the camera and microphone.");
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  } catch (e) {
+    const [t, h] = cameraError(e); setState("idle", "Ready"); setStatus(t, h); return;
+  }
+  await loadIce();
+  $("local").srcObject = localStream; $("local").hidden = false;
+  $("start").disabled = true; $("age").disabled = true; active = true; buttons(true);
+  listenCh = sb.channel("sig-" + myId)
+    .on("broadcast", { event: "sig" }, ({ payload }) => onSignal(payload))
+    .subscribe(s => { if (s === "SUBSCRIBED") next(); });
+}
+
+function stop() {
+  active = false; token++; teardown();
+  sb.rpc("leave_queue", { my_id: myId });
+  if (listenCh) { sb.removeChannel(listenCh); listenCh = null; }
+  localStream?.getTracks().forEach(t => t.stop()); localStream = null; $("local").srcObject = null; $("local").hidden = true;
+  buttons(false); $("age").disabled = false; $("start").disabled = !$("age").checked;
+  setState("idle", "Stopped");
+  setStatus("Stopped", "Press Start to chat again.");
+}
+
+function teardown() {
+  clearTimeout(retryTimer); clearTimeout(failTimer); clearInterval(statsTimer); statsTimer = null;
+  if (dc) { dc.onopen = dc.onclose = dc.onmessage = null; try { dc.close(); } catch (e) {} dc = null; }
+  if (pc) { pc.onicecandidate = pc.ontrack = pc.onconnectionstatechange = pc.ondatachannel = null; pc.close(); pc = null; }
+  if (sendCh) { sb.removeChannel(sendCh); sendCh = null; }
+  $("remote").srcObject = null; peerId = null; pendingIce = []; gotTrack = false;
+  $("quality").hidden = true; $("tag-remote").hidden = true; sEnable(false);
+}
+
+function sendBye() { if (peerId && sendCh) send({ type: "bye" }); }
+function send(msg) { sendCh?.send({ type: "broadcast", event: "sig", payload: { ...msg, from: myId } }); }
+
+async function openSendChannel(id) {
+  sendCh = sb.channel("sig-" + id);
+  await new Promise(res => sendCh.subscribe(s => { if (s === "SUBSCRIBED") res(); }));
+}
+
+/* connection quality: round trip time and packet loss, every 2 seconds */
+function startStats() {
+  clearInterval(statsTimer); lastStats = { lost: 0, recv: 0 };
+  statsTimer = setInterval(async () => {
+    if (!pc) return;
+    try {
+      const rep = await pc.getStats();
+      let rtt = null, lost = 0, recv = 0, relay = false;
+      rep.forEach(s => {
+        if (s.type === "candidate-pair" && s.state === "succeeded" && (s.nominated || s.selected)) {
+          if (s.currentRoundTripTime != null) rtt = s.currentRoundTripTime * 1000;
+          const lc = rep.get(s.localCandidateId); if (lc && lc.candidateType === "relay") relay = true;
+        }
+        if (s.type === "inbound-rtp" && s.kind === "video") { lost = s.packetsLost || 0; recv = s.packetsReceived || 0; }
+      });
+      const dl = lost - lastStats.lost, dr = recv - lastStats.recv; lastStats = { lost, recv };
+      const loss = dr + dl > 0 ? dl / (dr + dl) : 0;
+      let q = "good";
+      if ((rtt != null && rtt > 400) || loss > 0.08) q = "poor"; else if ((rtt != null && rtt > 180) || loss > 0.03) q = "fair";
+      $("quality").dataset.q = q; $("quality").hidden = false;
+      $("quality-text").textContent = { good: "Good connection", fair: "Fair connection", poor: "Weak connection" }[q] + (relay ? " (relayed)" : "");
+    } catch (e) {}
+  }, 2000);
+}
+
+function makePc() {
+  pc = new RTCPeerConnection({ iceServers: ICE || STUN });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.ondatachannel = e => wireChannel(e.channel);
+  pc.ontrack = e => {
+    $("remote").srcObject = e.streams[0]; setStatus("");
+    $("tag-remote").hidden = false;
+    if (!gotTrack) { gotTrack = true; setState("connected", "Connected"); MCSound.play("matched"); startStats(); }
+  };
+  pc.onicecandidate = e => { if (e.candidate) send({ type: "ice", candidate: e.candidate }); };
+  pc.onconnectionstatechange = () => {
+    clearTimeout(failTimer);
+    if (pc?.connectionState === "failed" || pc?.connectionState === "closed") { setStatus("Connection failed", "Trying someone new…"); next(); }
+    else if (pc?.connectionState === "disconnected") failTimer = setTimeout(next, 4000);
+    else if (pc?.connectionState === "connecting") failTimer = setTimeout(next, 20000);
+  };
+}
+
+async function next(msg) {
+  if (!active) return;
+  teardown();
+  const my = ++token;
+  setState("searching", "Searching");
+  setStatus(msg || "Looking for someone…", "This can take a moment when few people are online.");
+  const { data: other, error } = await sb.rpc("find_match", { my_id: myId });
+  if (my !== token || !active) return;
+  if (error) { setState("left", "Error"); setStatus("Matchmaking error", error.message); retryTimer = setTimeout(next, 5000); return; }
+  if (other) {              // someone was waiting: we start the call
+    peerId = other;
+    await openSendChannel(other);
+    if (my !== token) return;
+    makePc();
+    wireChannel(pc.createDataChannel("chat"));
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    send({ type: "offer", sdp: pc.localDescription });
+    setState("connecting", "Connecting"); setStatus("Connecting…", "");
+  } else {                  // we're queued: wait for an offer, requeue periodically
+    retryTimer = setTimeout(next, 10000);
+  }
+}
+
+async function onSignal(m) {
+  if (!active) return;
+  if (m.type === "offer") {
+    if (peerId) return;                      // already busy
+    clearTimeout(retryTimer); token++;
+    peerId = m.from; setState("connecting", "Connecting"); setStatus("Connecting…", "");
+    await openSendChannel(m.from);
+    makePc();
+    await pc.setRemoteDescription(m.sdp);
+    for (const c of pendingIce) await pc.addIceCandidate(c).catch(() => {});
+    pendingIce = [];
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    send({ type: "answer", sdp: pc.localDescription });
+    return;
+  }
+  if (m.from !== peerId) return;
+  if (m.type === "answer") await pc?.setRemoteDescription(m.sdp);
+  else if (m.type === "ice") {
+    if (pc?.remoteDescription) await pc.addIceCandidate(m.candidate).catch(() => {});
+    else pendingIce.push(m.candidate);
+  }
+  else if (m.type === "bye") { MCSound.play("left"); setState("left", "Partner left"); next("Partner left. Finding someone new…"); }
+}
+</script>
+</body>
+</html>

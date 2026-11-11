@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MirrorChat: public rooms and random 1-to-1 text</title>
+<meta name="description" content="Join a public room or get paired with one random stranger. You get a random name, no signup.">
+<meta name="theme-color" content="#0a0d14">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@400..700&family=Funnel+Sans:wght@400..600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5v14l9-7z" fill="currentColor"/><path d="M18 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.500 6a8.500 8.500 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html" aria-label="MirrorChat home">
+    <svg viewBox="0 0 32 26" aria-hidden="true"><path fill="#5ab9fc" d="M6 1h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9.500l-3 4v-4H6a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z"/><path fill="#e9edf3" d="M26 1h-6a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h2.500l3 4v-4h.5a3 3 0 0 0 3-3V4a3 3 0 0 0-3-3z"/></svg>
+    <span class="sr-only">MirrorChat</span><span aria-hidden="true">MirrorChat</span>
+  </a>
+  <div class="seg" role="tablist" aria-label="Chat type">
+    <button type="button" role="tab" id="tab-rooms" aria-selected="true">Rooms</button>
+    <button type="button" role="tab" id="tab-random" aria-selected="false">Random 1-to-1</button>
+  </div>
+  <div class="bar__right">
+    <span class="chip">You are <b id="me"></b></span>
+    <button type="button" class="icon-btn" id="mute"><svg aria-hidden="true"><use href="#i-sound"/></svg><span class="icon-btn__label">Sound on</span></button>
+    <a class="tab" href="video.html">Video chat</a>
+  </div>
+</header>
+
+<div class="chat" id="chat" data-mode="rooms">
+  <aside class="rooms" id="rooms" aria-label="Rooms"><h2>Rooms</h2></aside>
+
+  <section class="chat__main" aria-label="Conversation">
+    <div class="chat__head">
+      <div><h1 class="chat__title" id="title">General</h1><p class="chat__sub" id="sub">Everyone in this room reads every message.</p></div>
+      <span class="state" id="rstate" data-state="idle" hidden><span class="state__dot"></span><span id="rstate-text">Ready</span></span>
+    </div>
+
+    <div class="pair" id="pair" hidden>
+      <label class="consent"><input type="checkbox" id="age"> I'm 18+ and will follow the rules: no nudity, harassment or illegal content.</label>
+      <div class="btns">
+        <button class="btn" id="rstart" type="button" disabled><svg aria-hidden="true"><use href="#i-play"/></svg>Start</button>
+        <button class="btn btn--ghost" id="rnext" type="button" disabled><svg aria-hidden="true"><use href="#i-next"/></svg>Next person</button>
+        <button class="btn btn--danger" id="rreport" type="button" disabled><svg aria-hidden="true"><use href="#i-flag"/></svg>Report</button>
+        <button class="btn btn--ghost" id="rstop" type="button" disabled><svg aria-hidden="true"><use href="#i-stop"/></svg>Stop</button>
+      </div>
+    </div>
+
+    <div class="log" id="log" role="log" aria-live="polite" aria-label="Messages"></div>
+
+    <div class="composer">
+      <form id="f">
+        <label class="sr-only" for="t">Message</label>
+        <input id="t" placeholder="Say something" maxlength="500" autocomplete="off" required>
+        <button class="btn" type="submit" id="send">Send message</button>
+      </form>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="sounds.js"></script>
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const adj = ["Happy","Sleepy","Brave","Quick","Sneaky","Chill"], noun = ["Fox","Panda","Otter","Wolf","Owl","Koala"];
+let name = null;
+try { name = localStorage.getItem("mc_name"); } catch (e) {}
+if (!name) { name = pick(adj) + pick(noun) + Math.floor(Math.random() * 100); try { localStorage.setItem("mc_name", name); } catch (e) {} }
+$("me").textContent = name;
+MCSound.bindToggle($("mute"));
+const myId = crypto.randomUUID();
+
+const ROOMS = [
+  { id: "general", name: "General", blurb: "Anything goes" },
+  { id: "gaming", name: "Gaming", blurb: "Games and play" },
+  { id: "music", name: "Music", blurb: "Songs and playlists" },
+  { id: "late-night", name: "Late night", blurb: "For the night owls" },
+  { id: "study", name: "Study", blurb: "Focus and homework" }
+];
+const replies = ["Interesting, tell me more!","Ha, I was just thinking that.","Hmm, why do you say that?","Totally agree 👍","Bold take.","Did you know octopuses have three hearts?","Random fact: bananas are berries.","I'm just a humble bot, but sure!","Say that again but in pirate.","Mirror mirror on the wall… who's chatting the most of all?"];
+
+const log = $("log");
+function addEl(cls, who, body) {
+  const d = document.createElement("div");
+  d.className = "msg" + (cls ? " " + cls : "");
+  if (who) { const w = document.createElement("div"); w.className = "who"; w.textContent = who; d.append(w); }
+  const b = document.createElement("div"); b.textContent = body; d.append(b);
+  log.append(d); log.scrollTop = log.scrollHeight;
+  return d;
+}
+const note = t => addEl("note", "", t);
+
+/* ---------- mode switch ---------- */
+let mode = "rooms";
+function setMode(m) {
+  if (m === mode && $("chat").dataset.mode === m) return;
+  if (mode === "random") randomStop(true);
+  if (mode === "rooms") leaveRoom();
+  mode = m;
+  $("chat").dataset.mode = m;
+  $("tab-rooms").setAttribute("aria-selected", String(m === "rooms"));
+  $("tab-random").setAttribute("aria-selected", String(m === "random"));
+  $("rooms").hidden = m !== "rooms";
+  $("pair").hidden = m !== "random";
+  $("rstate").hidden = m !== "random";
+  log.replaceChildren();
+  if (m === "rooms") { history.replaceState(null, "", "#rooms"); joinRoom(room); }
+  else {
+    history.replaceState(null, "", "#random");
+    $("title").textContent = "Random 1-to-1";
+    $("sub").textContent = "You are paired with one stranger. Next finds someone else.";
+    setComposer(false);
+    setRState("idle", "Ready");
+    note("Confirm you're 18+ and press Start to meet someone.");
+  }
+}
+$("tab-rooms").onclick = () => setMode("rooms");
+$("tab-random").onclick = () => setMode("random");
+
+/* ---------- rooms ---------- */
+let room = "general";
+try { const r = localStorage.getItem("mc_room"); if (ROOMS.some(x => x.id === r)) room = r; } catch (e) {}
+let roomCh = null, roomToken = 0, seen = new Set();
+
+function paintRooms() {
+  const list = $("rooms");
+  list.querySelectorAll(".room-btn").forEach(b => b.remove());
+  for (const r of ROOMS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "room-btn";
+    b.setAttribute("aria-current", String(r.id === room));
+    b.innerHTML = "<span></span><small></small>";
+    b.firstChild.textContent = r.name; b.lastChild.textContent = r.blurb;
+    b.onclick = () => { if (r.id !== room) { room = r.id; try { localStorage.setItem("mc_room", room); } catch (e) {} joinRoom(room); } };
+    list.append(b);
+  }
+}
+function leaveRoom() { roomToken++; if (roomCh) { sb.removeChannel(roomCh); roomCh = null; } }
+
+function renderMsg(m, live) {
+  if (seen.has(m.id)) return; seen.add(m.id);
+  const mine = m.username === name;
+  addEl((mine ? "me" : "") + (m.is_bot ? " bot" : ""), m.username, m.body);
+  if (live && !mine) MCSound.play("message");
+}
+
+async function joinRoom(id) {
+  leaveRoom();
+  const my = roomToken;
+  seen = new Set(); log.replaceChildren(); paintRooms();
+  const info = ROOMS.find(r => r.id === id);
+  $("title").textContent = info.name;
+  $("sub").textContent = "Everyone in this room reads every message.";
+  setComposer(true);
+  const { data, error } = await sb.from("messages").select("*").eq("room", id).order("created_at", { ascending: false }).limit(50);
+  if (my !== roomToken) return;
+  if (error) note("Could not load messages: " + error.message);
+  else (data || []).reverse().forEach(m => renderMsg(m, false));
+  roomCh = sb.channel("room-" + id, { config: { presence: { key: myId } } })
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: "room=eq." + id }, p => renderMsg(p.new, true))
+    .on("presence", { event: "sync" }, () => {
+      const n = Object.keys(roomCh.presenceState()).length;
+      $("sub").textContent = n + (n === 1 ? " person here. " : " people here. ") + "Everyone in this room reads every message.";
+    })
+    .subscribe(s => { if (s === "SUBSCRIBED") roomCh.track({ name }); });
+}
+
+async function sendRoom(body) {
+  const { error } = await sb.from("messages").insert({ username: name, body, room });
+  if (error) { note("Message not sent: " + error.message); return; }
+  MCSound.play("send");
+  if (Math.random() < 0.6) {
+    const r = room;
+    setTimeout(() => sb.from("messages").insert({ username: "MirrorBot", body: pick(replies), is_bot: true, room: r }), 800 + Math.random() * 1200);
+  }
+}
+
+/* ---------- composer ---------- */
+function setComposer(on) { $("t").disabled = !on; $("send").disabled = !on; if (on) $("t").placeholder = "Say something"; else $("t").placeholder = "Connect to someone to start chatting"; }
+$("f").onsubmit = e => {
+  e.preventDefault();
+  MCSound.unlock();
+  const t = $("t"), body = t.value.trim(); if (!body) return; t.value = "";
+  if (mode === "rooms") sendRoom(body); else randomSend(body);
+};
+
+/* ---------- random 1-to-1 text ---------- */
+const R = { active: false, peerId: null, listen: null, out: null, token: 0, retry: null };
+function setRState(state, text) { $("rstate").dataset.state = state; $("rstate-text").textContent = text; }
+function rButtons(on) { $("rnext").disabled = $("rreport").disabled = $("rstop").disabled = !on; }
+
+$("age").onchange = () => { $("rstart").disabled = !$("age").checked || R.active; };
+$("rstart").onclick = randomStart;
+$("rnext").onclick = () => { randomBye(); randomNext("Looking for someone…"); MCSound.play("left"); };
+$("rstop").onclick = () => randomStop(false);
+$("rreport").onclick = async () => {
+  if (!R.peerId) return;
+  await sb.rpc("report_peer", { reporter: myId, reported: R.peerId });
+  MCSound.play("report");
+  randomBye(); randomNext("Reported. Finding someone new…");
+};
+
+function randomStart() {
+  MCSound.unlock();
+  R.active = true; $("rstart").disabled = true; $("age").disabled = true; rButtons(true);
+  log.replaceChildren();
+  R.listen = sb.channel("txt-" + myId)
+    .on("broadcast", { event: "sig" }, ({ payload }) => randomSignal(payload))
+    .subscribe(s => { if (s === "SUBSCRIBED") randomNext("Looking for someone…"); });
+}
+function randomTeardown() {
+  clearTimeout(R.retry);
+  if (R.out) { sb.removeChannel(R.out); R.out = null; }
+  R.peerId = null; setComposer(false);
+}
+function randomStop(silent) {
+  R.active = false; R.token++; randomTeardown();
+  sb.rpc("leave_text_queue", { my_id: myId });
+  if (R.listen) { sb.removeChannel(R.listen); R.listen = null; }
+  rButtons(false); $("age").disabled = false; $("rstart").disabled = !$("age").checked;
+  if (!silent) { setRState("idle", "Stopped"); note("Stopped. Press Start to chat again."); }
+}
+function rsend(msg) { if (R.out) R.out.send({ type: "broadcast", event: "sig", payload: { ...msg, from: myId } }); }
+function randomBye() { if (R.peerId && R.out) rsend({ type: "bye" }); }
+async function openOut(id) {
+  R.out = sb.channel("txt-" + id);
+  await new Promise(res => R.out.subscribe(s => { if (s === "SUBSCRIBED") res(); }));
+}
+function paired() {
+  setRState("connected", "Connected to a stranger");
+  log.replaceChildren(); note("You are chatting with a stranger. Say hi.");
+  setComposer(true); $("t").focus(); MCSound.play("matched");
+}
+async function randomNext(msg) {
+  if (!R.active) return;
+  randomTeardown();
+  const my = ++R.token;
+  setRState("searching", "Looking for someone…");
+  log.replaceChildren(); note(msg || "Looking for someone…");
+  const { data: other, error } = await sb.rpc("find_text_match", { my_id: myId });
+  if (my !== R.token || !R.active) return;
+  if (error) { setRState("left", "Matchmaking error"); note("Matchmaking error: " + error.message); R.retry = setTimeout(randomNext, 5000); return; }
+  if (other) {
+    R.peerId = other;
+    await openOut(other);
+    if (my !== R.token) return;
+    rsend({ type: "hello" });
+    paired();
+  } else {
+    R.retry = setTimeout(randomNext, 10000);
+  }
+}
+async function randomSignal(m) {
+  if (!R.active) return;
+  if (m.type === "hello") {
+    if (R.peerId) return;
+    clearTimeout(R.retry); R.token++;
+    R.peerId = m.from;
+    await openOut(m.from);
+    paired();
+    return;
+  }
+  if (m.from !== R.peerId) return;
+  if (m.type === "msg") { addEl("", "Stranger", String(m.body).slice(0, 500)); MCSound.play("message"); }
+  else if (m.type === "bye") { MCSound.play("left"); setRState("left", "Stranger left"); randomNext("Stranger left. Finding someone new…"); }
+}
+function randomSend(body) {
+  if (!R.peerId) return;
+  rsend({ type: "msg", body });
+  addEl("me", "You", body); MCSound.play("send");
+}
+addEventListener("beforeunload", () => { if (R.active) { randomBye(); sb.rpc("leave_text_queue", { my_id: myId }); } });
+
+/* ---------- start ---------- */
+paintRooms();
+if (location.hash === "#random") { mode = "rooms"; setMode("random"); }
+else { $("chat").dataset.mode = "rooms"; joinRoom(room); }
+</script>
+</body>
+</html>

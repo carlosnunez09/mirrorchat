@@ -8,10 +8,15 @@ create table if not exists public.messages (
 
 alter table public.messages enable row level security;
 
+drop policy if exists "anyone can read messages" on public.messages;
 create policy "anyone can read messages" on public.messages
   for select using (true);
 
+drop policy if exists "anyone can post messages" on public.messages;
 create policy "anyone can post messages" on public.messages
   for insert with check (true);
 
-alter publication supabase_realtime add table public.messages;
+do $$ begin
+  alter publication supabase_realtime add table public.messages;
+exception when duplicate_object then null;
+end $$;
