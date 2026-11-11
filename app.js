@@ -18,6 +18,8 @@
   $("myid").textContent = "anon-" + myId.slice(0, 6);
 
   // ---- state -------------------------------------------------------------
+  let ageOk = true;
+  let active = false;            // user intent: false after Stop, so late async work can't resurrect a search
   let state = "idle";            // idle | searching | connecting | connected
   let localStream = null;
   let lobby = null, lobbyReady = false;
@@ -39,15 +41,39 @@
     log.append(d);
     log.scrollTop = log.scrollHeight;
   }
-  function setStatus(html, spinning) {
+  function setStatus(html, spinning, title = "") {
     $("status").innerHTML = html;
+    $("title").textContent = title;
+    $("title").style.display = title ? "" : "none";
     $("spin").classList.toggle("off", !spinning);
-    $("overlay").classList.toggle("hidden", html === null);
+    $("overlay").classList.remove("hidden");
+  }
+  function toast(msg) {
+    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+    document.body.append(t); setTimeout(() => t.remove(), 3500);
+  }
+  // tiny synth cues – no audio files needed
+  let actx = null;
+  function blip(freqs) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      freqs.forEach((f, i) => {
+        const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + i * 0.12;
+        o.frequency.value = f; o.type = "sine";
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+        o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + 0.2);
+      });
+    } catch {}
   }
   function hideStatus() { $("overlay").classList.add("hidden"); }
   function updateUI() {
     const inCall = state === "connected", active = state !== "idle";
-    $("start").disabled = active;
+    $("start").disabled = active || !ageOk;
+    $("start2").style.display = active ? "none" : "";
+    $("start2").disabled = !ageOk;
+    $("start").style.display = active ? "none" : "";
+    $("next").style.display = active ? "" : "none";
+    $("stop").style.display = active ? "" : "none";
     $("next").disabled = !active;
     $("stop").disabled = !active;
     $("report").disabled = !inCall;
@@ -64,7 +90,7 @@
     lobby = sb.channel("lobby", { config: { presence: { key: myId }, broadcast: { self: false } } });
     lobby.on("presence", { event: "sync" }, () => {
       const n = onlineCount();
-      $("online").innerHTML = `<b>●</b> ${n} online`;
+      $("online").textContent = n === 1 ? "just you online" : `${n} online`;
       tryMatch();
     });
     lobby.on("broadcast", { event: "invite" }, ({ payload: p }) => onInvite(p));
@@ -133,7 +159,7 @@
     partnerId = peer; room = r;
     recent.add(peer); setTimeout(() => recent.delete(peer), 60000);
     setState("connecting");
-    setStatus("Found someone – connecting…", true);
+    setStatus("Found someone – connecting…", true, "Connecting");
     clearTimeout(connectTimer);
     connectTimer = setTimeout(() => { addMsg("Connection timed out, finding someone else…", "sys"); restart(); }, 15000);
   }
@@ -163,7 +189,12 @@
       const s = pc.connectionState;
       if (s === "connected") {
         clearTimeout(connectTimer); clearTimeout(discTimer);
-        if (state !== "connected") { setState("connected"); hideStatus(); addMsg("You're connected. Say hi! 👋", "sys"); }
+        if (state !== "connected") {
+          setState("connected"); hideStatus(); $("tag").style.display = ""; blip([660, 880]);
+          $("remote").classList.add("flash"); setTimeout(() => $("remote").classList.remove("flash"), 600);
+          $("remoteVideo").play().catch(() => {});
+          addMsg("You're connected. Say hi! 👋", "sys"); $("t").focus();
+        }
       } else if (s === "disconnected") {
         clearTimeout(discTimer); discTimer = setTimeout(() => tok === session && partnerLeft(), 6000);
       } else if (s === "failed") partnerLeft();
@@ -174,8 +205,18 @@
   function setupDc(ch) {
     dc = ch;
     ch.onmessage = e => {
-      try { const m = JSON.parse(e.data); if (m.t === "msg" && typeof m.body === "string") addMsg(m.body.slice(0, 500), ""); } catch {}
+      try {
+        const m = JSON.parse(e.data);
+        if (m.t === "msg" && typeof m.body === "string") { showTyping(false); addMsg(m.body.slice(0, 500), ""); if (document.hidden) blip([520]); }
+        else if (m.t === "typ") showTyping(true);
+      } catch {}
     };
+  }
+
+  let typingTimer = null, lastTyp = 0;
+  function showTyping(on) {
+    $("typing").textContent = on ? "Stranger is typing…" : "";
+    clearTimeout(typingTimer); if (on) typingTimer = setTimeout(() => showTyping(false), 2500);
   }
 
   async function startOffer(tok) {
@@ -210,7 +251,7 @@
 
   // ---- lifecycle ---------------------------------------------------------
   async function teardown(notify) {
-    session++;
+    session++; $("tag").style.display = "none";
     clearTimeout(connectTimer); clearTimeout(discTimer); clearPending();
     const p = pair, d = dc, c = pc;
     pair = dc = pc = null; partnerId = room = null; iceQueue = [];
@@ -224,31 +265,33 @@
   }
 
   async function startSearching() {
+    if (!active) return;
     setState("searching");
-    setStatus("Looking for someone to chat with…", true);
+    setStatus("Looking for someone to chat with…<br><small style=\"color:var(--dim)\">Tip: open a second tab to test it yourself</small>", true, "Searching");
     try { await track("searching"); } catch (e) { return fail(e); }
+    if (!active) { try { await lobby.untrack(); } catch {} return; }
     tryMatch();
   }
 
-  async function restart() { await teardown(true); if (state !== "idle") startSearching(); }
+  async function restart() { await teardown(true); startSearching(); }
 
   async function partnerLeft() {
-    if (state === "idle") return;
-    addMsg("Stranger disconnected.", "sys");
+    if (!active || state === "idle") return;
+    addMsg("Stranger disconnected.", "sys"); blip([440, 330]); showTyping(false);
     await teardown(false);
     startSearching();
   }
 
   function fail(e) {
     console.error(e);
-    addMsg("Error: " + (e && e.message || e), "sys");
-    restart();
+    addMsg("Something went wrong – retrying…", "sys");
+    setTimeout(() => active && restart(), 1500);
   }
 
   async function getMedia() {
     if (localStream) return true;
     if (!navigator.mediaDevices || !window.isSecureContext) {
-      setStatus("Camera access needs <b>https://</b> (or localhost).", false); return false;
+      setStatus("Camera access needs <b>https://</b> (or localhost).", false, "Secure connection needed"); return false;
     }
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
@@ -256,40 +299,53 @@
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       $("localVideo").srcObject = localStream;
+      $("pip").style.display = "block";
       return true;
     } catch (e) {
-      setStatus("Couldn't access your camera/mic. Allow permission in your browser and press Start again.", false);
+      setStatus("MirrorChat needs your camera and microphone. Allow access in your browser's address bar, then press Start again.", false, "Camera blocked");
       return false;
     }
   }
 
   // ---- buttons -----------------------------------------------------------
+  $("start2").onclick = () => $("start").click();
   $("start").onclick = async () => {
     if (!(await getMedia())) return;
-    try { await joinLobby(); } catch (e) { setStatus("Can't reach the server: " + e.message, false); return; }
+    try { await joinLobby(); } catch (e) { setStatus("Can't reach the server right now. Check your connection and try again.", false, "Offline"); return; }
+    active = true;
     log.innerHTML = "";
     startSearching();
   };
   $("next").onclick = async () => {
-    if (state === "idle") return;
+    if (!active) return;
     log.innerHTML = "";
     await restart();
   };
   $("stop").onclick = async () => {
-    await teardown(true);
+    active = false;
     setState("idle");
-    try { if (lobbyReady) await lobby.untrack(); } catch {}
-    setStatus("Press <b>Start</b> to meet someone random.", false);
+    setStatus("Random 1-on-1 video chat. No sign-up, no accounts.", false, "Meet someone new");
+    showTyping(false);
+    await teardown(true);
+    try { if (lobbyReady && !active) await lobby.untrack(); } catch {}
   };
   const toggle = (btn, kind, label) => btn.onclick = () => {
     const t = localStream && localStream[kind === "audio" ? "getAudioTracks" : "getVideoTracks"]()[0];
     if (!t) return;
     t.enabled = !t.enabled;
     btn.classList.toggle("off", !t.enabled);
-    btn.textContent = (t.enabled ? "" : "🚫 ") + label;
+    btn.textContent = t.enabled ? label[0] : label[1];
+    if (kind === "video") $("pip").classList.toggle("camoff", !t.enabled);
   };
-  toggle($("mic"), "audio", "🎤 Mic");
-  toggle($("cam"), "video", "📷 Cam");
+  toggle($("mic"), "audio", ["🎤", "🔇"]);
+  toggle($("cam"), "video", ["📷", "🚫"]);
+
+  $("t").addEventListener("input", () => {
+    if (dc && dc.readyState === "open" && Date.now() - lastTyp > 1500) { lastTyp = Date.now(); dc.send('{"t":"typ"}'); }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && active && !document.querySelector("dialog[open]")) { e.preventDefault(); $("next").click(); }
+  });
 
   $("chat").onsubmit = e => {
     e.preventDefault();
@@ -310,7 +366,7 @@
     blocked.add(reported);
     sb.from("reports").insert({ reporter: myId, reported, reason }).then(r => r.error && console.warn("report failed", r.error));
     log.innerHTML = "";
-    addMsg("Reported. Thanks – finding someone new.", "sys");
+    toast("Reported – thanks. Finding someone new."); 
     await restart();
   };
 
@@ -318,14 +374,16 @@
   const gate = $("gate");
   let ok = false;
   try { ok = localStorage.getItem("mc_18") === "1"; } catch {}
+  ageOk = ok;
   if (!ok) {
-    $("start").disabled = true;
+    updateUI();
     gate.addEventListener("cancel", e => e.preventDefault());
     gate.showModal();
-    $("gateYes").onclick = () => { try { localStorage.setItem("mc_18", "1"); } catch {} gate.close(); $("start").disabled = false; };
+    $("gateYes").onclick = () => { try { localStorage.setItem("mc_18", "1"); } catch {} gate.close(); ageOk = true; updateUI(); };
     $("gateNo").onclick = () => { location.href = "about:blank"; };
   }
 
   window.addEventListener("pagehide", () => { if (pair) pair.send({ type: "broadcast", event: "bye", payload: {} }); });
   updateUI();
+  joinLobby().catch(() => { $("online").textContent = "offline"; }); // subscribe early so the online count is live before Start
 })();

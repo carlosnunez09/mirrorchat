@@ -15,17 +15,22 @@ Each page load gets a random throwaway id (`anon-xxxxxx`); nothing is stored abo
 
 ## Setup
 
-1. Put your anon key in `config.js` (Supabase → Project Settings → API).
+1. `config.js` holds your project URL and **publishable** key (safe in client code; never put the secret/service key or access token here).
 2. Run `schema.sql` in the Supabase SQL editor (only creates the `reports` table; Realtime needs no tables).
 3. Serve over **HTTPS or localhost** (browsers block the camera otherwise):
    `python3 -m http.server 8000` → http://localhost:8000
    For public hosting use Netlify / Vercel / Cloudflare Pages / GitHub Pages.
 4. Open it in two tabs/devices, press **Start** in both.
 
+## Deploy
+
+It's a static site (`index.html`, `app.js`, `config.js`), so any HTTPS static host works. Drag the folder into Netlify Drop, or connect the repo to Cloudflare Pages / Vercel / GitHub Pages (publish directory `/`, no build command). WebRTC and camera access need HTTPS, which these all provide.
+
 ## Features
 
 - Random 1:1 matching, **Next** to skip, **Stop** to leave
-- Mic / camera toggles, mirrored self-view, mobile-friendly layout
+- Mic / camera toggles, picture-in-picture self-view, mobile-friendly layout, `Esc` for Next
+- Typing indicator and sound cues
 - Peer-to-peer text chat during calls
 - 18+ gate, **Report** button (skips + blocks that person, logs to `reports`)
 - Avoids re-matching the person you just skipped
