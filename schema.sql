@@ -1,17 +1,19 @@
-create table if not exists public.messages (
+-- MirrorChat needs no tables for matchmaking/signaling: that runs entirely on
+-- Supabase Realtime (Presence + Broadcast), which works out of the box with the anon key.
+--
+-- The only table is an insert-only abuse report log you review in the dashboard.
+
+create table if not exists public.reports (
   id bigint generated always as identity primary key,
-  username text not null check (char_length(username) between 1 and 24),
-  body text not null check (char_length(body) between 1 and 500),
-  is_bot boolean not null default false,
+  reporter text not null check (char_length(reporter) <= 64),
+  reported text not null check (char_length(reported) <= 64),
+  reason text not null check (char_length(reason) <= 100),
   created_at timestamptz not null default now()
 );
 
-alter table public.messages enable row level security;
+alter table public.reports enable row level security;
 
-create policy "anyone can read messages" on public.messages
-  for select using (true);
-
-create policy "anyone can post messages" on public.messages
+drop policy if exists "anyone can file a report" on public.reports;
+create policy "anyone can file a report" on public.reports
   for insert with check (true);
-
-alter publication supabase_realtime add table public.messages;
+-- No select/update/delete policies => anon users can't read reports back.
