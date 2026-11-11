@@ -24,7 +24,7 @@ Each page load gets a random throwaway id (`anon-xxxxxx`); nothing is stored abo
 
 ## Deploy
 
-It's a static site (`index.html`, `app.js`, `config.js`), so any HTTPS static host works. Drag the folder into Netlify Drop, or connect the repo to Cloudflare Pages / Vercel / GitHub Pages (publish directory `/`, no build command). WebRTC and camera access need HTTPS, which these all provide.
+It's a static site (`index.html`, `app.js`, `config.js`), so any HTTPS static host works. Easiest: GitHub repo → Settings → Pages → Source "Deploy from a branch" → pick the branch, folder `/ (root)`. Or drag the folder into Netlify Drop, or connect the repo to Cloudflare Pages / Vercel (publish directory `/`, no build command). WebRTC and camera access need HTTPS, which these all provide.
 
 ## Features
 
